@@ -1,0 +1,39 @@
+Dict{String, Any}("nu" => 3, "theta" => 0.7853981633974483, "method" => "global", "beta" => 0.2)
+Min objective(mie_coeffs[1], mie_coeffs[2], mie_coeffs[3], mie_coeffs[4], mie_coeffs[5], mie_coeffs[6])
+Subject to
+ mie_coeffs[1] ≥ -1.5707963267948966
+ mie_coeffs[2] ≥ -1.5707963267948966
+ mie_coeffs[3] ≥ -1.5707963267948966
+ mie_coeffs[4] ≥ -1.5707963267948966
+ mie_coeffs[5] ≥ -1.5707963267948966
+ mie_coeffs[6] ≥ -1.5707963267948966
+ mie_coeffs[1] ≤ 1.5707963267948966
+ mie_coeffs[2] ≤ 1.5707963267948966
+ mie_coeffs[3] ≤ 1.5707963267948966
+ mie_coeffs[4] ≤ 1.5707963267948966
+ mie_coeffs[5] ≤ 1.5707963267948966
+ mie_coeffs[6] ≤ 1.5707963267948966
+
+* Solver : NLopt
+
+* Status
+  Result count       : 1
+  Termination status : ITERATION_LIMIT
+  Message from the solver:
+  "MAXEVAL_REACHED"
+
+* Candidate solution (result #1)
+  Primal status      : UNKNOWN_RESULT_STATUS
+  Dual status        : NO_SOLUTION
+  Objective value    : 1.94989e-04
+  Primal solution :
+    mie_coeffs[1] : -1.38810e+00
+    mie_coeffs[2] : -1.12114e+00
+    mie_coeffs[3] : -1.50630e+00
+    mie_coeffs[4] : -1.31821e+00
+    mie_coeffs[5] : -1.43910e+00
+    mie_coeffs[6] : -1.56583e+00
+
+* Work counters
+  Solve time (sec)   : 1.48186e+03
+
