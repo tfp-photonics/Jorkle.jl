@@ -1,8 +1,8 @@
 #  Jorkle
 
-**J**ulia-based **O**ptimization of **R**elativistic Spheres to Explore **K**erker-**L**ike Effects
+**J**ulia-based **O**ptimization of **R**elativistic Spheres to Explore **K**erker-**L**ike **E**ffects
 
-This repository contains code for the paper "Identifying regions of minimal back-scattering by a relativistically-moving sphere".
+This repository contains code for the paper "Identifying regions of minimal back-scattering by a relativistically-moving sphere" ([arXiv](https://arxiv.org/abs/2304.05319)).
 
 ## Installation
 
@@ -21,3 +21,16 @@ The backscattering minimization was done using the file `scripts/minimize_direct
 Optimization results as shown in Table 1 in the paper can be found in the folder `results/`.
 
 For detailed usage, refer to the `cmdline_args()` function of the two scripts.
+
+## Citing
+
+If you find this code useful in your research, please cite:
+
+```
+@article{whittam2023identifying,
+  title={Identifying regions of minimal back-scattering by a relativistically-moving sphere},
+  author={Whittam, Mitchell R. and Lamprianidis, Aristeidis G. and Augenstein, Yannick and Rockstuhl, Carsten},
+  journal={arXiv preprint arXiv:2304.05319},
+  year={2023}
+}
+```
