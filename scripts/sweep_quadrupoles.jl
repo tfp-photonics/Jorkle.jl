@@ -9,19 +9,19 @@ function cmdline_args()
     s = ArgParseSettings()
     @add_arg_table s begin
         "--npoints"
-        arg_type = Integer
+        arg_type = Int64
         default = 100
         "--beta"
-        arg_type = Real
+        arg_type = Float64
         default = 0.2
         "--theta"
-        arg_type = Real
+        arg_type = Float64
         default = pi / 4
         "--ed"
-        arg_type = Real
+        arg_type = Float64
         default = pi / 6
         "--md"
-        arg_type = Real
+        arg_type = Float64
         default = pi / 4
     end
     return parse_args(s)

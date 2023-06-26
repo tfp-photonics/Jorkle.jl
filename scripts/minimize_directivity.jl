@@ -10,7 +10,7 @@ function cmdline_args()
     s = ArgParseSettings()
     @add_arg_table s begin
         "--nu"
-        arg_type = Int
+        arg_type = Int64
         default = 2
         "--beta"
         arg_type = Float64
