@@ -9,7 +9,7 @@ import Jorkle: c_0
 function cmdline_args()
     s = ArgParseSettings()
     @add_arg_table s begin
-        "--nu"
+        "--l_max"
         arg_type = Int64
         default = 2
         "--beta"
@@ -29,7 +29,7 @@ end
 function main()
     args = cmdline_args()
 
-    nu_max = args["nu"]
+    l_max = args["l_max"]
     beta = args["beta"]
     theta = args["theta"]
     method = args["method"]
@@ -43,7 +43,7 @@ function main()
     w0_ratio = 10.0
     w0 = w0_ratio * 2pi * c_0 / wi
 
-    mu, nu = get_munu(nu_max)
+    l, m = get_lm(l_max)
 
     atol = eps(Float64)
     rtol = sqrt(eps(Float64))
@@ -52,14 +52,14 @@ function main()
         s = length(x) ÷ 2
         me = vcat(x[1:s]...)
         mm = vcat(x[(s + 1):end]...)
-        d = directivity(me, mm, theta, phi, h_inc, wi, w0, gamma, beta, mu, nu, atol, rtol)
+        d = directivity(me, mm, theta, phi, h_inc, wi, w0, gamma, beta, m, l, atol, rtol)
         return d
     end
 
     model = Model()
-    register(model, :objective, 2nu_max, objective; autodiff=true)
+    register(model, :objective, 2l_max, objective; autodiff=true)
 
-    @variable(model, -pi / 2 <= mie_coeffs[1:(2 * nu_max)] <= pi / 2)
+    @variable(model, -pi / 2 <= mie_coeffs[1:(2 * l_max)] <= pi / 2)
     @NLobjective(model, Min, objective(mie_coeffs...))
 
     if method == "local"

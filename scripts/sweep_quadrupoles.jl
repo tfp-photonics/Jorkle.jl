@@ -13,7 +13,7 @@ function cmdline_args()
         default = 100
         "--beta"
         arg_type = Float64
-        default = 0.2
+        default = 1e-3
         "--theta"
         arg_type = Float64
         default = pi / 4
@@ -22,7 +22,7 @@ function cmdline_args()
         default = pi / 6
         "--md"
         arg_type = Float64
-        default = pi / 4
+        default = pi / 6
     end
     return parse_args(s)
 end
@@ -36,7 +36,7 @@ function main()
     md = args["md"]
     n = args["npoints"]
 
-    nu_max = 2
+    l_max = 2
     h_inc = 1
     phi = 0.0
 
@@ -46,28 +46,28 @@ function main()
     w0_ratio = 10.0
     w0 = w0_ratio * 2pi * c_0 / wi
 
-    mu, nu = get_munu(nu_max)
+    l, m = get_lm(l_max)
 
     atol = eps(Float64)
     rtol = sqrt(eps(Float64))
 
-    m = Array{Float64}(undef, (n, n))
+    mat = Array{Float64}(undef, (n, n))
     rng = collect(LinRange(-π / 2, π / 2, n))
     indices = Iterators.product(eachindex(rng), eachindex(rng))
 
     for (i, j) in collect(indices)
         me = [ed, rng[i]]
         mm = [md, rng[j]]
-        m[i, j] = directivity(
-            me, mm, theta, phi, h_inc, wi, w0, gamma, beta, mu, nu, atol, rtol
+        mat[i, j] = directivity(
+            me, mm, theta, phi, h_inc, wi, w0, gamma, beta, m, l, atol, rtol
         )
     end
 
-    h5write("./sweep_results.h5", "m", m)
-    h5writeattr("./sweep_results.h5", "m", args)
+    h5write("./sweep_results.h5", "mat", mat)
+    h5writeattr("./sweep_results.h5", "mat", args)
 
     heatmap(
-        m;
+        mat;
         xlims=(0.5, n + 0.5),
         ylims=(0.5, n + 0.5),
         xticks=([1, n / 2 + 0.5, n], ["-π/2", "0", "π/2"]),
@@ -80,7 +80,7 @@ function main()
     )
     savefig("sweep_results.png")
 
-    return nothing
+    return nothing 
 end
 
 main()
