@@ -1,6 +1,6 @@
 module Jorkle
 
-export backscattered_energy, total_energy, directivity, get_munu
+export backscattered_energy, total_energy, directivity, get_lm
 
 using AssociatedLegendrePolynomials
 using SpecialFunctions
@@ -11,151 +11,175 @@ using Memoization
 const c_0 = 2.99792458e8
 const Z_0 = 376.730313668
 
-function norm_param(m, n)
-    if abs(m) > n
+function norm_param(l, m)
+    if abs(m) > l
         return 0.0
     end
     return 1im^float(m) *
-           sqrt((2n + 1) / (4π * n * (n + 1))) *
-           sqrt(exp(logabsgamma(n - m + 1)[1] - logabsgamma(n + m + 1)[1]))
+           sqrt((2l + 1) / (4π * l * (l + 1))) *
+           sqrt(exp(logabsgamma(l - m + 1)[1] - logabsgamma(l + m + 1)[1]))
 end
 
-function legendre(m, n, theta)
-    if abs(m) > n
+function legendre(m, l, theta)
+    if abs(m) > l
         return 0.0
     end
-    a = m < 0 ? (-1)^m * factorial(n + m) / factorial(n - m) : 1
-    return a * Plm(n, abs(m), cos(theta))
+    a = m < 0 ? (-1)^m * factorial(l + m) / factorial(l - m) : 1
+    return a * Plm(l, abs(m), cos(theta))
 end
 
-@memoize function tau(m, n, h, theta)
-    lmn = legendre(m, n, real(theta))
-    tau_1 = legendre(m + 1, n, real(theta)) + m * cos(theta) / sin(theta) * lmn
-    tau_2 = m * lmn / sin(theta)
-    return -tau_1 - h * tau_2
+@memoize function tau(m, l, h, theta)
+    lmn = legendre(m, l, real(theta))
+    tau_2 = legendre(m + 1, l, real(theta)) + m * cos(theta) / sin(theta) * lmn
+    tau_1 = m * lmn / sin(theta)
+    return -tau_2 - h * tau_1
 end
 
-function get_munu(n)
-    mu = vcat([(-i):i for i in 1:n]...)
-    nu = vcat([fill(i, 2i + 1) for i in 1:n]...)
-    return mu, nu
+function get_lm(l_max)
+    l = vcat([fill(i, 2i + 1) for i in 1:l_max]...)
+    m = vcat([(-i):i for i in 1:l_max]...)
+    return l, m
 end
 
-function theta_root(beta, omega_i, omega_p, gamma)
-    a = (gamma * omega_i - beta^2 * gamma * omega_i - omega_p) / beta / omega_p
-    return -1im * log(a + 1im * sqrt(complex(1 - a^2)))
-end
+function theta_0(wi, wp, b, g)
+    z = (wi - g * wp) / b / g / wp
 
-function theta_func(theta_p, phi_p, theta, beta, gamma)
-    a = (
-        (
-            sin(theta_p) * cos(phi_p) * sin(theta) +
-            gamma * (beta + cos(theta_p)) * cos(theta)
-        ) / (gamma * (1 + beta * cos(theta_p)))
-    )
-    return real(-1im * log(a + 1im * sqrt(1 - a^2)))
-end
-
-function phi_func(theta_p, phi_p, theta, beta, gamma)
-    x = sin(theta_p) * cos(phi_p) * cos(theta) - gamma * (cos(theta_p) + beta) * sin(theta)
-    y = sin(theta_p) * sin(phi_p)
-    return (real(-1im * log((x + 1im * y) / sqrt(x^2 + y^2))))
-end
-
-function diff_theta_func(beta, omega_i, theta_0, gamma)
-    return abs(
-        beta * (beta^2 - 1) * gamma * omega_i * sin(theta_0) / (1 + beta * cos(theta_0))^2
-    )
-end
-
-function jacobian_func(beta, theta_p, phi_p, theta, gamma)
-    stp = sin(theta_p)
-    ctp = cos(theta_p)
-    st = sin(theta)
-    ct = cos(theta)
-    spp = sin(phi_p)
-    cpp = cos(phi_p)
-
-    a = gamma * ct * (beta + ctp) + cpp * st * stp
-    b = cpp * ct * stp
-    c = -gamma * (beta + ctp) * st + b
-    d = (spp * stp)^2 + c^2
-    e = 1 + beta * ctp
-
-    return (
-        (
-            stp * (
-                -c * ctp * e * st +
-                c * cpp * (-a * beta + ct * e * gamma) * stp +
-                spp^2 * (-a * beta * ct + e * gamma) * stp^2
-            )
-        ) / (d * e^2 * sqrt(1 - (a / (e * gamma))^2) * gamma)
-    )
+    return real(-1im * log(z + sqrt(complex(z^2 - 1))))
 end
 
 function heaviside(x, y)
     return ifelse(x < 0, zero(x), ifelse(x > 0, one(x), oftype(x, y)))
 end
 
-function gaussian_profile(theta, omega_i, omega_0)
+function gaussian_profile(hi, theta, phi, wi, w0)
     return (
         sin(2theta) *
-        exp(-(omega_i^2) * omega_0^2 * sin(theta)^2 / (4c_0^2)) *
-        heaviside(π / 2 - theta, 1)
+        exp(-(wi^2) * w0^2 * sin(theta)^2 / (4c_0^2)) *
+        heaviside(π / 2 - theta, 1) *
+        exp(1im * hi * phi)
     )
 end
 
-function A_coeff(phi_p, omega_p, beta, theta, h_inc, w_i, w_0, mu, nu, gamma)
-    theta_0 = theta_root(beta, w_i, omega_p, gamma)
-    theta_A = theta_func(theta_0, phi_p, theta, beta, gamma)
+function theta_rtp(Tinc, theta, phi)
+    z = sin(theta) * cos(phi) * sin(Tinc) + cos(theta) * cos(Tinc)
+    return real(-1im * log(z + sqrt(complex(z^2 - 1))))
+end
 
-    phi_A = phi_func(theta_0, phi_p, theta, beta, gamma)
+function phi_rtp(Tinc, theta, phi)
+    x = sin(theta) * cos(phi) * cos(Tinc) - cos(theta) * sin(Tinc)
+    y = sin(theta) * sin(phi)
 
-    a = tau(mu, nu, h_inc, theta_0) * exp(-1im * mu * phi_p)
+    a = y / x
 
-    phase = (
+    return real(0.5 * 1im * log((1 - a * 1im) / (1 + a * 1im)))
+end
+
+function jacobian_rotated(theta, phi, Tinc)
+    return (
+        sin(theta) *
+        (
+            sin(phi)^2 * sin(theta)^2 +
+            (cos(phi) * cos(Tinc) * sin(theta) + (-1) * cos(theta) * sin(Tinc))^2
+        )^(-1) *
+        (
+            sin(phi)^2 * sin(Tinc)^2 +
+            (cos(Tinc) * sin(theta) + (-1) * cos(phi) * cos(theta) * sin(Tinc))^2
+        ) *
+        (1 + (-1) * (cos(theta) * cos(Tinc) + cos(phi) * sin(theta) * sin(Tinc))^2)^(-1 / 2)
+    )
+end
+
+function phase(t, p, T, h, tp, pp)
+    return (
         (1 / 2) * (
-            (1 + h_inc^2) *
-            (cos(theta) * sin(theta_A) + cos(theta_A) * cos(phi_A) * sin(theta)) +
-            -2im * h_inc * sin(theta) * sin(phi_A)
-        ) / sqrt(
-            (cos(theta) * cos(phi_A) * sin(theta_A) + cos(theta_A) * sin(theta))^2 +
-            sin(theta_A)^2 * sin(phi_A)^2,
+            (cos(p) + 1im * h * cos(t) * sin(p)) *
+            (cos(pp) + (1im * (-1)) * h * cos(tp) * sin(pp)) +
+            h *
+            sin(t) *
+            (
+                h * cos(pp) * cos(tp) * sin(T) +
+                (1im * (-1)) * sin(pp) * sin(T) +
+                h * cos(T) * sin(tp)
+            ) +
+            (h * cos(p) * cos(t) + 1im * sin(p)) * (
+                h * cos(pp) * cos(T) * cos(tp) +
+                (1im * (-1)) * cos(T) * sin(pp) +
+                (-1) * h * sin(T) * sin(tp)
+            )
         )
     )
-
-    b = (
-        gamma *
-        (1 - beta * (cos(theta_0) + beta) / (1 + beta * cos(theta_0))) *
-        jacobian_func(beta, theta_0, phi_p, theta, gamma) *
-        gaussian_profile(theta_A, w_i, w_0) / diff_theta_func(beta, w_i, theta_0, gamma)
-    )
-
-    return a * b * phase
 end
 
-@memoize function I(mu, nu, nu_p, h_rad, gamma, beta; atol, rtol)
+function g_coeff(theta, phi, hi, wi, w0, Tinc)
+    tbd = theta_rtp(Tinc, theta, phi)
+    pbd = phi_rtp(Tinc, theta, phi)
+
+    gauss = gaussian_profile(hi, tbd, pbd, wi, w0)
+
+    J = jacobian_rotated(theta, phi, Tinc)
+
+    P = phase(theta, phi, Tinc, hi, tbd, pbd)
+
+    return gauss * J * P
+end
+
+function s_coeff(theta, phi, l, m, hi)
+    pf = 4 * pi * 1im^float(l + 2 * m - 1) * norm_param(l, m)
+
+    t = tau(m, l, hi, theta)
+
+    exponential = exp(-1im * m * phi)
+
+    return pf * t * exponential
+end
+
+function theta_btr(t, b)
+    z = (cos(t) + b) / (1 + b * cos(t))
+
+    return real(-1im * log(z + sqrt(complex(z^2 - 1))))
+end
+
+function phi_btr(p)
+    return p
+end
+
+function A_coeff(phi, wp, b, g, Tinc, wi, hi, w0, l, m)
+    t0 = theta_0(wi, wp, b, g)
+
+    denom = b * g^2 * wp * sin(t0) * (1 + b * cos(t0))
+
+    t_btr = theta_btr(t0, b)
+    p_btr = phi_btr(phi)
+
+    S = s_coeff(t0, phi, l, m, hi)
+
+    G = g_coeff(t_btr, p_btr, hi, wi, w0, Tinc)
+
+    return G * S / denom
+end
+
+@memoize function I(m, l, lp, hr, g, b; atol, rtol)
     prob = IntegralProblem(0.0, pi) do theta, _
-        theta_p_sca = acos((cos(theta) - beta) / (1 - beta * cos(theta)))
-        doppler = (gamma * (1 + beta * cos(theta_p_sca)))^3
+        theta_p_sca = acos((cos(theta) - b) / (1 - b * cos(theta)))
+        doppler = (g * (1 + b * cos(theta_p_sca)))^3
         return (
             sin(theta_p_sca) *
             doppler *
-            tau(mu, nu, h_rad, theta_p_sca) *
-            tau(mu, nu_p, h_rad, theta_p_sca)
+            tau(m, l, hr, theta_p_sca) *
+            tau(m, lp, hr, theta_p_sca)
         )
     end
     return only(solve(prob, QuadGKJL(); abstol=atol, reltol=rtol))
 end
 
-@memoize function I_B(beta, theta, h_inc, w_i, w_0, mu, mu_p, nu, nu_p, gamma; atol, rtol)
-    c = gamma * (1 - beta * cos(theta))
-    outer = IntegralProblem(c - beta * c / 4, c + beta * c / 4) do omega, _
+@memoize function I_B(b, Tinc, hi, wi, w0, m, mp, l, lp, g; atol, rtol)
+    c = g * (1 - b * cos(Tinc))
+    outer = IntegralProblem(wi * (g * (1 - b)), c, wi * (g * (1 + b))) do wp, _
         inner = IntegralProblem(0.0, 2pi) do phi, _
             return (
-                1 / omega^2 *
-                A_coeff(phi, omega, beta, theta, h_inc, w_i, w_0, mu, nu, gamma) *
-                conj(A_coeff(phi, omega, beta, theta, h_inc, w_i, w_0, mu_p, nu_p, gamma))
+                1 / wp^2 *
+                A_coeff(phi, wp, b, g, Tinc, wi, hi, w0, l, m) *
+                conj(A_coeff(phi, wp, b, g, Tinc, wi, hi, w0, lp, mp))
             )
         end
         only(solve(inner, QuadGKJL(); abstol=atol, reltol=rtol))
@@ -163,12 +187,12 @@ end
     return only(solve(outer, QuadGKJL(); abstol=10 * atol, reltol=10 * rtol))
 end
 
-function get_tmatrix(mie_elec, mie_mag, h_inc, h_rad)
+function get_tmatrix(mie_elec, mie_mag, hi, hr)
     alpha = π / 2 .- mie_elec
-    beta = π / 2 .- mie_mag
+    b = π / 2 .- mie_mag
     a = @. -1im * sin(alpha) * exp(-1im * alpha)
-    b = @. -1im * sin(beta) * exp(-1im * beta)
-    return (a + h_inc * h_rad * b) / 2
+    b = @. -1im * sin(b) * exp(-1im * b)
+    return (a + hi * hr * b) / 2
 end
 
 function backscattered_energy(
@@ -176,55 +200,43 @@ function backscattered_energy(
     mie_mag,
     theta,
     phi,
-    h_inc,
-    h_rad,
-    w_i,
-    w_0,
-    gamma,
-    beta,
-    mu,
-    nu,
+    hi,
+    hr,
+    wi,
+    w0,
+    g,
+    b,
+    m,
+    l,
     atol=eps(Float64),
     rtol=sqrt(eps(Float64)),
 )
-    T = get_tmatrix(mie_elec, mie_mag, h_inc, h_rad)
+    T = get_tmatrix(mie_elec, mie_mag, hi, hr)
 
     integral = 0.0
     pp = 4pi * c_0^2 / Z_0
     phi_sca = pi + phi
-    theta_p_sca = acos((cos(theta) - beta) / (1 - beta * cos(theta)))
-    doppler = (gamma * (1 + beta * cos(theta_p_sca)))^3
+    theta_bs = pi - theta
+    theta_p_sca = acos((cos(theta_bs) - b) / (1 - b * cos(theta_bs)))
+    doppler = (g * (1 + b * cos(theta_p_sca)))^3
 
-    munu = Iterators.product(map(unique, [mu, mu, nu, nu])...)
+    ml = Iterators.product(map(unique, [m, m, l, l])...)
 
-    for (mui, mupi, nui, nupi) in munu
+    for (mi, mpi, li, lpi) in ml
         prefactor =
             pp *
             doppler *
-            (-1.0im)^(nui - nupi) *
-            norm_param(mui, nui) *
-            conj(norm_param(mupi, nupi)) *
-            tau(mui, nui, h_rad, theta_p_sca) *
-            conj(tau(mupi, nupi, h_rad, theta_p_sca)) *
-            exp(1im * (mui - mupi) * phi_sca)
+            (-1.0im)^(li - lpi) *
+            norm_param(li, mi) *
+            conj(norm_param(lpi, mpi)) *
+            tau(mi, li, hr, theta_p_sca) *
+            conj(tau(mpi, lpi, hr, theta_p_sca)) *
+            exp(1im * (mi - mpi) * phi_sca)
         integral += real(
             prefactor *
-            conj(T[nupi]) *
-            T[nui] *
-            I_B(
-                beta,
-                theta,
-                h_inc,
-                w_i,
-                w_0,
-                mui,
-                mupi,
-                nui,
-                nupi,
-                gamma;
-                atol=atol,
-                rtol=rtol,
-            ),
+            conj(T[lpi]) *
+            T[li] *
+            I_B(b, theta, hi, wi, w0, mi, mpi, li, lpi, g; atol=atol, rtol=rtol),
         )
     end
     return integral
@@ -234,52 +246,35 @@ function total_energy(
     mie_elec,
     mie_mag,
     theta,
-    h_inc,
-    h_rad,
-    w_i,
-    w_0,
-    gamma,
-    beta,
-    mu,
-    nu,
+    hi,
+    hr,
+    wi,
+    w0,
+    g,
+    b,
+    m,
+    l,
     atol=eps(Float64),
     rtol=sqrt(eps(Float64)),
 )
-    T = get_tmatrix(mie_elec, mie_mag, h_inc, h_rad)
+    T = get_tmatrix(mie_elec, mie_mag, hi, hr)
 
-    munu = Iterators.filter(Iterators.product(map(unique, [mu, nu, nu])...)) do x
+    ml = Iterators.filter(Iterators.product(map(unique, [m, l, l])...)) do x
         (x[2] <= x[3]) & (abs(x[1]) <= abs(x[3])) & (abs(x[1]) <= abs(x[2]))
     end
 
     integral = 0
     pp = 8pi^2 * c_0^2 / Z_0
-    for (mui, nui, nupi) in munu
-        fac = (nui == nupi) ? 1.0 : 2.0
+    for (mi, li, lpi) in ml
+        fac = (li == lpi) ? 1.0 : 2.0
         prefactor =
-            fac *
-            pp *
-            (-1.0im)^(nupi - nui) *
-            norm_param(mui, nui) *
-            conj(norm_param(mui, nupi))
+            fac * pp * (-1.0im)^(lpi - li) * conj(norm_param(li, mi)) * norm_param(lpi, mi)
         integral += real(
             prefactor *
-            conj(T[nupi]) *
-            T[nui] *
-            I_B(
-                beta,
-                theta,
-                h_inc,
-                w_i,
-                w_0,
-                mui,
-                mui,
-                nui,
-                nupi,
-                gamma;
-                atol=atol,
-                rtol=rtol,
-            ) *
-            I(mui, nui, nupi, h_rad, gamma, beta; atol=atol, rtol=rtol),
+            conj(T[li]) *
+            T[lpi] *
+            I_B(b, theta, hi, wi, w0, mi, mi, li, lpi, g; atol=atol, rtol=rtol) *
+            I(mi, li, lpi, hr, g, b; atol=atol, rtol=rtol),
         )
     end
     return integral
@@ -295,22 +290,22 @@ function directivity(
     w_0,
     gamma,
     beta,
-    mu,
-    nu,
+    m,
+    l,
     atol=eps(Float64),
     rtol=sqrt(eps(Float64)),
 )
     bs_p = backscattered_energy(
-        mie_elec, mie_mag, theta, phi, h_inc, 1, w_i, w_0, gamma, beta, mu, nu, atol, rtol
+        mie_elec, mie_mag, theta, phi, h_inc, 1, w_i, w_0, gamma, beta, m, l, atol, rtol
     )
     bs_m = backscattered_energy(
-        mie_elec, mie_mag, theta, phi, h_inc, -1, w_i, w_0, gamma, beta, mu, nu, atol, rtol
+        mie_elec, mie_mag, theta, phi, h_inc, -1, w_i, w_0, gamma, beta, m, l, atol, rtol
     )
     tot_p = total_energy(
-        mie_elec, mie_mag, theta, h_inc, 1, w_i, w_0, gamma, beta, mu, nu, atol, rtol
+        mie_elec, mie_mag, theta, h_inc, 1, w_i, w_0, gamma, beta, m, l, atol, rtol
     )
     tot_m = total_energy(
-        mie_elec, mie_mag, theta, h_inc, -1, w_i, w_0, gamma, beta, mu, nu, atol, rtol
+        mie_elec, mie_mag, theta, h_inc, -1, w_i, w_0, gamma, beta, m, l, atol, rtol
     )
     return 4pi * (bs_p + bs_m) / (tot_p + tot_m)
 end
