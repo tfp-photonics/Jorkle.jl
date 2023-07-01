@@ -65,7 +65,7 @@ function main()
     if method == "local"
         set_optimizer(model, Ipopt.Optimizer)
     elseif method == "global"
-        local_opt = NLopt.Opt(:LD_MMA, 2nu_max)
+        local_opt = NLopt.Opt(:LD_MMA, 2l_max)
         local_opt.maxeval = 500
         local_opt.ftol_rel = 1e-9
         local_opt.xtol_rel = 1e-6
