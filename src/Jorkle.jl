@@ -159,11 +159,11 @@ function A_coeff(phi, wp, b, g, Tinc, wi, hi, w0, l, m)
 end
 
 @memoize function I(m, l, lp, hr, g, b; atol, rtol)
-    prob = IntegralProblem(0.0, pi) do theta, _
+    prob = IntegralProblem(0.01, pi-0.01) do theta, _
         theta_p_sca = acos((cos(theta) - b) / (1 - b * cos(theta)))
         doppler = (g * (1 + b * cos(theta_p_sca)))^3
         return (
-            sin(theta_p_sca) *
+            sin(theta) *
             doppler *
             tau(m, l, hr, theta_p_sca) *
             tau(m, lp, hr, theta_p_sca)
@@ -174,7 +174,7 @@ end
 
 @memoize function I_B(b, Tinc, hi, wi, w0, m, mp, l, lp, g; atol, rtol)
     c = g * (1 - b * cos(Tinc))
-    outer = IntegralProblem(wi * (g * (1 - b)), c, wi * (g * (1 + b))) do wp, _
+    outer = IntegralProblem(wi/g/(1+b), c, wi/g/(1-b)) do wp, _
         inner = IntegralProblem(0.0, 2pi) do phi, _
             return (
                 1 / wp^2 *
